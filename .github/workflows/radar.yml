@@ -43,15 +43,14 @@ jobs:
           config["ai_answers"]["enabled"] = False
           config["usecases"]["per_day"] = 0
           config["review"]["per_day"] = 0
-          config["tutorials"]["max_leads"] = 0
-          config["feeds"]["enabled"] = [
+          config.setdefault("tutorials", {})["max_leads"] = 0
+          config["feeds"] = {"enabled": [
               "producthunt",
               "hn",
               "openrouter",
               "appstore",
               "awesome",
-          ]
-          config["feeds"]["weekly"] = []
+          ], "weekly": []}
           Path("config.free.json").write_text(
               json.dumps(config, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
