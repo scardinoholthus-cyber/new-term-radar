@@ -1,12 +1,13 @@
-name: New-term radar
+name: New-term radar · free listening
 
-# Runs once a day at 09:30 Asia/Shanghai (01:30 UTC).
-# The runtime config is generated from config.example.json so no extra config file
-# needs to be maintained in this fork.
+# Daily public-source scan. No paid API keys are read by this workflow.
 on:
   schedule:
     - cron: "30 1 * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/radar.yml"
 
 concurrency:
   group: radar
@@ -27,21 +28,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install pinned radar release
+      - name: Install uv
         run: pip install uv
 
-      - name: Build low-cost runtime config
+      - name: Build free-listening config
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
 
           config = json.loads(Path("config.example.json").read_text(encoding="utf-8"))
+          config["judge"]["model"] = ""
           config["markets"]["enabled"] = False
           config["ai_answers"]["enabled"] = False
-          config["usecases"]["per_day"] = 3
-          config["review"]["per_day"] = 3
-          Path("config.json").write_text(
+          config["usecases"]["per_day"] = 0
+          config["review"]["per_day"] = 0
+          config["tutorials"]["max_leads"] = 0
+          config["feeds"]["enabled"] = [
+              "producthunt",
+              "hn",
+              "openrouter",
+              "appstore",
+              "awesome",
+          ]
+          config["feeds"]["weekly"] = []
+          Path("config.free.json").write_text(
               json.dumps(config, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
           )
@@ -54,13 +65,24 @@ jobs:
           key: radar-state-${{ github.run_id }}
           restore-keys: radar-state-
 
-      - name: Run daily radar
+      - name: Run free public-source scan
         env:
-          AISA_API_KEY: ${{ secrets.AISA_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uvx new-term-radar==0.7.1 daily --out report.md
+          uvx new-term-radar==0.7.1 daily \
+            --config config.free.json \
+            --skip x,judge,newsites,revenue,asks,sellers,builders,gsc,review,usecases,tutorials,money,sidelights \
+            --out report.md
           if [ -f report.md ]; then cat report.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - name: Verify no paid API spend
+        run: |
+          if grep -Eq 'Paid API data spend this run.*\$0\.000' report.md; then
+            echo "Verified: paid API spend is $0.000"
+          else
+            echo "Could not verify a zero-spend line in report.md"
+            exit 1
+          fi
 
       - name: Save radar state
         if: always()
@@ -69,11 +91,11 @@ jobs:
           path: state
           key: radar-state-${{ github.run_id }}
 
-      - name: Keep report and state
+      - name: Keep free-listening report and state
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: radar-daily-${{ github.run_id }}
+          name: radar-free-${{ github.run_id }}
           path: |
             report.md
             report.json
